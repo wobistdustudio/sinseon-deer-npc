@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>NPC 사슴 시뮬레이션 데모</title>
+  <style>
+    body {
+      background: #f0f0f0;
+      text-align: center;
+      font-family: sans-serif;
+      margin: 0; padding: 20px;
+    }
+    #npc-container {
+      display: inline-block;
+      position: relative;
+      margin: 20px;
+    }
+    #npc {
+      max-width: 300px; /* 사슴 이미지 크기 조절 */
+    }
+    /* 사과 이모지 스타일 */
+    .apple {
+      position: absolute;
+      font-size: 24px; /* 사과 크기 (이모지 크기) */
+      /* 초기 위치: 대략 뿔 부분 (좌우 위치는 이미지에 맞게 조정 필요) */
+    }
+    #apple1 { top: 0%; left: 20%; }  /* 왼쪽(또는 앞쪽) 뿔의 사과 */
+    #apple2 { top: 0%; left: 75%; }  /* 오른쪽(또는 뒤쪽) 뿔의 사과 */
+    /* 대사 표시 영역 스타일 */
+    #dialogue {
+      background: #fff;
+      border: 2px solid #ccc;
+      border-radius: 8px;
+      padding: 15px;
+      width: 80%;
+      max-width: 400px;
+      margin: 10px auto;
+      min-height: 50px;
+      line-height: 1.4;
+    }
+    /* 버튼 스타일 */
+    #next-btn {
+      background: #4CAF50;
+      color: white;
+      font-size: 16px;
+      border: none;
+      border-radius: 5px;
+      padding: 10px 20px;
+      cursor: pointer;
+    }
+    #next-btn:disabled {
+      background: #aaa;
+      cursor: not-allowed;
+    }
+    /* 꼬리 흔들기 애니메이션 (전체 이미지 좌우 회전) */
+    @keyframes tailWag {
+      0%   { transform: rotate(0deg); }
+      25%  { transform: rotate(10deg); }
+      50%  { transform: rotate(0deg); }
+      75%  { transform: rotate(-10deg); }
+      100% { transform: rotate(0deg); }
+    }
+    /* 머리 끄덕임 애니메이션 (전체 이미지 앞뒤 회전) */
+    @keyframes headNod {
+      0%   { transform: rotate(0deg); }
+      50%  { transform: rotate(10deg); }  /* 살짝 앞으로 숙이기 */
+      100% { transform: rotate(0deg); }
+    }
+    /* 사과 흔들기 애니메이션 (이모지 회전) */
+    @keyframes appleShake {
+      0%, 100% { transform: rotate(0deg); }
+      25% { transform: rotate(15deg); }
+      75% { transform: rotate(-15deg); }
+    }
+    /* 사과 떨어뜨리기 애니메이션 (아래로 이동 후 투명) */
+    @keyframes appleDrop {
+      0%   { opacity: 1; }
+      100% { top: 90%; opacity: 0; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- NPC 캐릭터 및 사과 요소 -->
+  <div id="npc-container">
+    <img id="npc" src="deer.png" alt="사슴 NPC">
+    <span class="apple" id="apple1">🍎</span>
+    <span class="apple" id="apple2">🍎</span>
+  </div>
+
+  <!-- 대사 표시 영역 -->
+  <p id="dialogue">※ 버튼을 눌러 대화를 시작하세요.</p>
+
+  <!-- 대화 진행 버튼 -->
+  <button id="next-btn">다음 ▶</button>
+
+  <script>
+    // NPC 대사 목록 (필요에 따라 수정 가능)
+    const dialogues = [
+      "안녕하세요. 신선정원에 오신 걸 환영합니다.
+      "저는 가구정령 '고제'입니다.",
+      "신선정원의 장인들은 자연의 영혼을 깃들게 하는 신비한 기술로 가구를 제작해 왔습니다.",
+      "그러나 오랜세월이 흘러, 그 생명력이 잠들어 사라져 버렸습니다.",
+      "당신은 이 신선정원 장인의 마지막 후손이자, 가구에 숨겨진 생명력을 깨우는 '각성자'입니다",
+      "각성자님, 가구에 당신의 손길로 봉인된 영혼을 깨우면, 생명력을 되살릴 수 있습니다.",
+      "당신은 잠든 영혼을 깨워, 신비한 기술의 비밀을 알아낼 준비가 되었습니까?",
+      "내 뿔의 생명사과가 다 떨어질때가지 모든 가구의 영혼을 깨워주세요."
+      "그리고 새로운 가구에 잠든 생명사과를 구하여, 고제의 뿔에 달아주세요",
+      "지도를 따라, 각 가구에 숨겨진 숨결을 찾아주세요."
+      "각성자님에게 손길에 신선정원의 생명력이 살아나길 기대합니다."
+
+    ];
+
+    // 요소 참조 가져오기
+    const npcImg = document.getElementById("npc");
+    const apple1 = document.getElementById("apple1");
+    const apple2 = document.getElementById("apple2");
+    const dialogueP = document.getElementById("dialogue");
+    const nextButton = document.getElementById("next-btn");
+
+    let index = -1;  // 현재 진행 중인 대사 인덱스 (-1에서 시작하여 클릭 시 0부터 시작)
+
+    // 꼬리 흔들기 애니메이션 함수
+    function tailWag() {
+      // 이미지 회전축을 상단 중앙으로 (뿔 부근)
+      npcImg.style.transformOrigin = "50% 0%";
+      // 애니메이션 적용
+      npcImg.style.animation = "tailWag 0.6s ease 1";
+      // 애니메이션 종료 후 초기화
+      setTimeout(() => {
+        npcImg.style.animation = "";
+      }, 600);
+    }
+
+    // 머리 끄덕임 애니메이션 함수
+    function headNod() {
+      npcImg.style.transformOrigin = "50% 100%"; // 회전축을 하단 중앙으로 (발 밑)
+      npcImg.style.animation = "headNod 0.5s ease 1";
+      setTimeout(() => {
+        npcImg.style.animation = "";
+      }, 500);
+    }
+
+    // 사과 흔들기 애니메이션 함수 (매개변수로 사과 요소를 받음)
+    function shakeApple(appleElem) {
+      appleElem.style.animation = "appleShake 0.5s ease 1";
+      setTimeout(() => {
+        appleElem.style.animation = "";
+      }, 500);
+    }
+
+    // 사과 떨어뜨리기 애니메이션 함수
+    function dropApple(appleElem) {
+      appleElem.style.animation = "appleDrop 0.8s ease-out 1 forwards";
+      // 애니메이션 끝난 후 완전히 제거 또는 숨김
+      setTimeout(() => {
+        appleElem.style.display = "none";  // 화면에서 사라지게 처리
+      }, 800);
+    }
+
+    // "다음" 버튼 클릭 이벤트 핸들러
+    nextButton.addEventListener("click", function() {
+      // 다음 대사로 넘어가기
+      index++;
+      if (index < dialogues.length) {
+        // 대사 표시 업데이트
+        dialogueP.textContent = dialogues[index];
+      } else {
+        // 모든 대사를 마친 경우 버튼 비활성화 후 종료
+        dialogueP.textContent = "대화 종료!";
+        nextButton.disabled = true;
+        return;
+      }
+
+      // 현재 대사에 따라 애니메이션 실행
+      switch(index) {
+        case 0:
+          // 첫 만남 인사: 살짝 꼬리 흔들며 반기기
+          tailWag();
+          break;
+        case 2:
+          // 행복한 표현: 꼬리 흔들기
+          tailWag();
+          break;
+        case 3:
+          // 이해했다는 표시: 고개 끄덕이기
+          headNod();
+          break;
+        case 4:
+          // 놀라서 사과 하나 떨어뜨리기
+          dropApple(apple1);
+          break;
+        case 5:
+          // 남은 사과 살짝 흔들기
+          shakeApple(apple2);
+          break;
+        case 6:
+          // 두번째 사과도 떨어뜨리기
+          dropApple(apple2);
+          break;
+        case 8:
+          // 도움 요청 (기대감): 꼬리 살짝 흔들기
+          tailWag();
+          break;
+        case 9:
+          // 감사 인사: 꼬리 흔들기
+          tailWag();
+          break;
+        default:
+          // 해당없음 (특정 애니메이션 없이 대사만 표시)
+          break;
+      }
+
+      // 클릭 후 버튼 잠시 비활성화하여 연속 클릭 방지 (애니메이션 진행 시간 동안)
+      nextButton.disabled = true;
+      setTimeout(() => {
+        nextButton.disabled = false;
+      }, 800); // 최대 애니메이션 시간인 0.8초 뒤 재활성화
+    });
+  </script>
+</body>
+</html>
+
